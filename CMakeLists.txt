@@ -11,18 +11,18 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(rosbag2_transport REQUIRED)
 
-add_executable(${PROJECT_NAME}
-  src/rosbag_recorder_node.cpp
+add_executable(recorder_node
+  src/recorder_node.cpp
 )
 
-ament_target_dependencies(${PROJECT_NAME}
+ament_target_dependencies(recorder_node
   rclcpp
   rosbag2_transport
   std_msgs
 )
 
 install(TARGETS
-  ${PROJECT_NAME}
+  recorder_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
