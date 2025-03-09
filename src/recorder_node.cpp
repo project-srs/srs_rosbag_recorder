@@ -17,6 +17,7 @@ using namespace std::chrono_literals;
 struct ModeGetterData {
   std::string data_folder{""};
   std::vector<std::string> topic_list{};
+  bool valid{false};
 };
 
 class ModeGetter : public rclcpp::Node
@@ -24,9 +25,19 @@ class ModeGetter : public rclcpp::Node
 public:
   ModeGetter() : Node("mode_getter")
   {
+    this->declare_parameter<bool>("start_on_boot", false);
     this->declare_parameter<std::string>("data_folder", "rosbag");
     this->declare_parameter<std::vector<std::string>>("topic_list", {"/rosout"});
-    mode_sub_ = this->create_subscription<std_msgs::msg::String>("mode", 1, std::bind(&ModeGetter::onModeReceived, this, std::placeholders::_1));
+    
+    const bool start_on_boot = this->get_parameter("start_on_boot").as_bool();
+    
+    if (start_on_boot) {
+      std_msgs::msg::String::SharedPtr msg = std::make_shared<std_msgs::msg::String>();
+      msg->data = "boot";
+      onModeReceived(msg);
+    } else {
+      mode_sub_ = this->create_subscription<std_msgs::msg::String>("mode", 1, std::bind(&ModeGetter::onModeReceived, this, std::placeholders::_1));
+    }
   }
 
   std::optional<ModeGetterData> getData(void)
@@ -54,6 +65,7 @@ private:
       ModeGetterData data;
       data.data_folder = data_folder;
       data.topic_list = topic_list;
+      data.valid = (msg->data != "");
       data_ = data;
     }
     last_mode_ = msg->data; 
@@ -87,31 +99,37 @@ int main(int argc, char *argv[])
   while(rclcpp::ok()) {
     auto mode_data = mode_getter->getData();
     if (mode_data.has_value()) {
+      // finish
       if (recorder) {
         recorder->stop();
         executor->remove_node(recorder);
       }
 
-      rosbag2_storage::StorageOptions storage_options;
-      storage_options.uri = mode_data.value().data_folder;
-      storage_options.storage_id = "mcap";
-      storage_options.max_bagfile_size = 0;
-      storage_options.max_bagfile_duration = 0;
-      storage_options.max_cache_size = 100;
-      storage_options.storage_preset_profile = "";
-      storage_options.snapshot_mode = false;
+      // start new
+      if (mode_data.value().valid) {
+        rosbag2_storage::StorageOptions storage_options;
+        storage_options.uri = mode_data.value().data_folder;
+        storage_options.storage_id = "mcap";
+        storage_options.max_bagfile_size = 0;
+        storage_options.max_bagfile_duration = 0;
+        storage_options.max_cache_size = 100;
+        storage_options.storage_preset_profile = "";
+        storage_options.snapshot_mode = false;
 
-      rosbag2_transport::RecordOptions record_options;
-      record_options.topics = mode_data.value().topic_list;
-      record_options.rmw_serialization_format = "cdr";
-      record_options.topic_polling_interval = std::chrono::milliseconds(1000);
+        rosbag2_transport::RecordOptions record_options;
+        record_options.topics = mode_data.value().topic_list;
+        record_options.rmw_serialization_format = "cdr";
+        record_options.topic_polling_interval = std::chrono::milliseconds(1000);
 
-      recorder = std::make_shared<rosbag2_transport::Recorder>(writer, keyboard_handler, storage_options, record_options);
-      executor->add_node(recorder);
-      recorder->record();
+        recorder = std::make_shared<rosbag2_transport::Recorder>(writer, keyboard_handler, storage_options, record_options);
+        executor->add_node(recorder);
+        recorder->record();
+      }
     }
     executor->spin_some();
   }
+
+  // finish last 
   if (recorder) {
     recorder->stop();
     executor->remove_node(recorder);
