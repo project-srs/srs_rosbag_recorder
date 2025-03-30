@@ -12,7 +12,7 @@
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>rosbag2_transport</depend>
-  <depend>ros-humble-rosbag2-storage-mcap</depend>
+  <depend>rosbag2_storage_mcap</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
